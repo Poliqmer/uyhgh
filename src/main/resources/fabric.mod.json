@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "eclipse_client",
+  "version": "${version}",
+  "name": "Eclipse Client",
+  "description": "Click GUI z modulami HUD i treningowymi (FPS, koordynaty, CPS, Keystrokes, Armor HUD, celownik, waypointy, trenerzy klikania i stawiania blokow, Toggle Sprint). GUI: prawy Shift lub /eclipse.",
+  "authors": ["Eclipse"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["pl.eclipse.client.EclipseClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
