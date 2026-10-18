@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+}
+
+group = 'pl.eclipse'
+version = findProperty('mod_version')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+// Atrapy klas Minecrafta/Fabric (nazwy posrednie "intermediary", takie jak w gotowych modach Fabric).
+// Sluza tylko do kompilacji i NIE trafiaja do jara - w grze uzywane sa prawdziwe klasy.
+sourceSets {
+    stubs {
+        java.srcDir 'src/stubs/java'
+    }
+    main {
+        compileClasspath += sourceSets.stubs.output
+    }
+}
+
+def localLibs = findProperty('localLibs')
+dependencies {
+    if (localLibs) {
+        stubsCompileOnly files("$localLibs/gson-2.10.jar", "$localLibs/slf4j-api-1.7.36.jar")
+        compileOnly files("$localLibs/gson-2.10.jar", "$localLibs/slf4j-api-1.7.36.jar")
+    } else {
+        compileOnly 'com.google.code.gson:gson:2.10.1'
+        compileOnly 'org.slf4j:slf4j-api:2.0.9'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+}
+
+jar {
+    archiveFileName = "EclipseClient-${findProperty('minecraft_version')}.jar"
+    from('LICENSE') { rename { "LICENSE_eclipse_client" } }
+}
+
+// Kontrola gotowego jara: musi istniec, miec poprawne metadane i klase wejsciowa, bez atrap Minecrafta w srodku.
+tasks.register('verifyJar') {
+    dependsOn jar
+    doLast {
+        def f = jar.archiveFile.get().asFile
+        if (!f.exists()) throw new GradleException("Brak pliku ${f}")
+        def zip = new java.util.zip.ZipFile(f)
+        try {
+            def meta = zip.getEntry('fabric.mod.json')
+            if (meta == null) throw new GradleException('Brak fabric.mod.json w jarze')
+            def json = new groovy.json.JsonSlurper().parse(zip.getInputStream(meta))
+            assert json.id == 'eclipse_client'
+            assert json.depends.minecraft == '~1.21.11'
+            assert json.depends.'fabric-api' != null
+            def entry = json.entrypoints.client[0].replace('.', '/') + '.class'
+            if (zip.getEntry(entry) == null) throw new GradleException("Brak klasy wejsciowej ${entry}")
+            def leaked = zip.entries().toList().findAll { it.name.startsWith('net/minecraft/') || it.name.startsWith('com/mojang/') || it.name.startsWith('org/lwjgl/') }
+            if (!leaked.isEmpty()) throw new GradleException("W jarze sa atrapy klas: ${leaked*.name.take(3)}")
+        } finally {
+            zip.close()
+        }
+        println "OK: ${f} (${f.length()} B) - metadane i klasa wejsciowa poprawne"
+    }
+}
+build.dependsOn verifyJar
